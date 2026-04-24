@@ -5,34 +5,12 @@
     return;
   }
 
-  const categories = [
-    { id: 1, name: "All" },
-    { id: 2, name: "Meals" },
-    { id: 3, name: "Drinks" },
-    { id: 4, name: "Snacks" }
-  ];
-
-  const products = [
-    { id: 1, name: "Chicken Adobo with Rice", price: 75, stock: 20, categoryId: 2, imageUrl: "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=400" },
-    { id: 2, name: "Pork Sinigang with Rice", price: 80, stock: 15, categoryId: 2, imageUrl: "https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400" },
-    { id: 3, name: "Fried Chicken with Rice", price: 70, stock: 25, categoryId: 2, imageUrl: "https://images.unsplash.com/photo-1626645738196-c2a7c87a8f58?w=400" },
-    { id: 4, name: "Pancit Canton", price: 50, stock: 30, categoryId: 2, imageUrl: "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=400" },
-    { id: 5, name: "Beef Tapa with Rice", price: 85, stock: 12, categoryId: 2, imageUrl: "https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=400" },
-    { id: 6, name: "Lumpia Shanghai (5pcs)", price: 40, stock: 50, categoryId: 2, imageUrl: "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=400" },
-    { id: 7, name: "Iced Tea", price: 20, stock: 50, categoryId: 3, imageUrl: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400" },
-    { id: 8, name: "Bottled Water", price: 15, stock: 100, categoryId: 3, imageUrl: "https://images.unsplash.com/photo-1548839140-29a749e1cf4d?w=400" },
-    { id: 9, name: "Fresh Buko Juice", price: 35, stock: 20, categoryId: 3, imageUrl: "https://images.unsplash.com/photo-1546173159-315724a31696?w=400" },
-    { id: 10, name: "Mango Shake", price: 45, stock: 15, categoryId: 3, imageUrl: "https://images.unsplash.com/photo-1623065422902-30a2d299bbe4?w=400" },
-    { id: 11, name: "Soft Drinks", price: 25, stock: 60, categoryId: 3, imageUrl: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=400" },
-    { id: 12, name: "Banana Cue", price: 15, stock: 40, categoryId: 4, imageUrl: "https://images.unsplash.com/photo-1603833665858-e61d17a86224?w=400" },
-    { id: 13, name: "Turon", price: 20, stock: 35, categoryId: 4, imageUrl: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=400" },
-    { id: 14, name: "Ensaymada", price: 25, stock: 30, categoryId: 4, imageUrl: "https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=400" },
-    { id: 15, name: "Cheese Sticks", price: 30, stock: 25, categoryId: 4, imageUrl: "https://images.unsplash.com/photo-1599490659213-e2b9527bd087?w=400" },
-    { id: 16, name: "French Fries", price: 35, stock: 20, categoryId: 4, imageUrl: "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=400" }
-  ];
-
   const state = {
     screen: "menu",
+    categories: [],
+    products: [],
+    orders: [],
+    employees: [],
     selectedCategory: 1,
     cart: [],
     currentOrder: null,
@@ -56,60 +34,50 @@
     qrEmployeeCode: null,
     scannerActive: false,
     scannerError: "",
-    scannerStream: null
+    scannerStream: null,
+    appError: "",
+    loading: true
   };
-
-  function getStorage(key, fallback) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch {
-      return fallback;
-    }
-  }
-
-  function setStorage(key, value) {
-    localStorage.setItem(key, JSON.stringify(value));
-  }
-
-  function initializeStorage() {
-    const employees = getStorage("employees", []);
-    if (!employees.length) {
-      setStorage("employees", [
-        {
-          id: "1",
-          name: "Admin",
-          qrCode: "ADMIN001",
-          pin: "1234",
-          role: "admin",
-          createdAt: new Date().toISOString()
-        }
-      ]);
-    }
-  }
-
-  function getEmployees() {
-    return getStorage("employees", []);
-  }
-
-  function getOrders() {
-    return getStorage("orders", []).map(order => ({
-      ...order,
-      createdAt: order.createdAt
-    }));
-  }
 
   function peso(value) {
     return `P${Number(value).toFixed(2)}`;
   }
 
   function escapeHtml(value) {
-    return String(value)
+    return String(value ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#39;");
+  }
+
+  async function fetchJson(url, options = {}) {
+    const response = await fetch(url, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {})
+      },
+      ...options
+    });
+
+    if (response.status === 204) {
+      return null;
+    }
+
+    const contentType = response.headers.get("content-type") || "";
+    const payload = contentType.includes("application/json")
+      ? await response.json()
+      : await response.text();
+
+    if (!response.ok) {
+      const message = typeof payload === "string"
+        ? payload
+        : payload.message || "Request failed.";
+      throw new Error(message);
+    }
+
+    return payload;
   }
 
   function totalAmount() {
@@ -124,12 +92,16 @@
     return state.cart.find(item => item.product.id === productId);
   }
 
+  function getEmployeeByQr(qrCode) {
+    return state.employees.find(item => item.qrCode === qrCode);
+  }
+
   function statusMeta(status) {
     switch (status) {
       case "pending":
         return { icon: "!", title: "Payment Pending", message: "Waiting for payment confirmation", iconClass: "pending" };
       case "paid":
-        return { icon: "OK", title: "Payment Confirmed", message: "Your order will be prepared shortly", iconClass: "paid" };
+        return { icon: "OK", title: "Payment Confirmed", message: "Your order has been accepted", iconClass: "paid" };
       case "preparing":
         return { icon: "Chef", title: "Preparing Your Order", message: "Our team is preparing your food", iconClass: "preparing" };
       case "completed":
@@ -182,8 +154,53 @@
     }
   }
 
+  async function loadBootstrapData() {
+    state.loading = true;
+    state.appError = "";
+    render();
+
+    try {
+      // Load the menu, orders, and staff from the server-backed database
+      // instead of keeping them only in browser local storage.
+      const [categories, products, orders, employees] = await Promise.all([
+        fetchJson("/api/catalog/categories"),
+        fetchJson("/api/catalog/products"),
+        fetchJson("/api/orders"),
+        fetchJson("/api/staff/employees")
+      ]);
+
+      state.categories = categories;
+      state.products = products;
+      state.orders = orders;
+      state.employees = employees;
+
+      if (state.currentOrder) {
+        state.currentOrder = state.orders.find(item => item.id === state.currentOrder.id) || null;
+      }
+    } catch (error) {
+      state.appError = error.message || "Unable to load the app data.";
+    } finally {
+      state.loading = false;
+      render();
+    }
+  }
+
+  async function refreshOrders() {
+    state.orders = await fetchJson("/api/orders");
+    if (state.currentOrder) {
+      state.currentOrder = state.orders.find(item => item.id === state.currentOrder.id) || null;
+    }
+  }
+
+  async function refreshEmployees() {
+    state.employees = await fetchJson("/api/staff/employees");
+    if (state.loggedInEmployee) {
+      state.loggedInEmployee = state.employees.find(item => item.id === state.loggedInEmployee.id) || null;
+    }
+  }
+
   function addToCart(productId) {
-    const product = products.find(item => item.id === productId);
+    const product = state.products.find(item => item.id === productId);
     if (!product || product.stock === 0) {
       return;
     }
@@ -219,34 +236,227 @@
     render();
   }
 
-  function placeOrder(paymentMethod, paymentData = {}) {
-    const amount = totalAmount();
-    const order = {
-      id: Date.now(),
-      orderNumber: `ORD${Date.now().toString().slice(-8)}`,
-      items: state.cart.map(item => ({
-        product: item.product,
-        quantity: item.quantity,
-        price: item.product.price
-      })),
-      totalAmount: amount,
-      paymentMethod,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      referenceNumber: paymentData.referenceNumber,
-      amountReceived: paymentData.amountReceived,
-      change: typeof paymentData.amountReceived === "number" ? paymentData.amountReceived - amount : undefined
-    };
+  async function placeOrder(paymentMethod, paymentData = {}) {
+    try {
+      // Orders are now persisted through the backend so they survive refreshes
+      // and can be shared across cashier and student sessions.
+      const order = await fetchJson("/api/orders", {
+        method: "POST",
+        body: JSON.stringify({
+          paymentMethod,
+          referenceNumber: paymentData.referenceNumber,
+          amountReceived: paymentData.amountReceived,
+          items: state.cart.map(item => ({
+            productId: item.product.id,
+            quantity: item.quantity
+          }))
+        })
+      });
 
-    const orders = getOrders();
-    orders.push(order);
-    setStorage("orders", orders);
+      state.currentOrder = order;
+      state.cart = [];
+      state.screen = "status";
+      resetPaymentState();
 
-    state.currentOrder = order;
-    state.cart = [];
-    state.screen = "status";
-    resetPaymentState();
+      await loadBootstrapData();
+    } catch (error) {
+      state.paymentError = error.message || "Unable to place the order.";
+      render();
+    }
+  }
+
+  async function submitManualQr() {
+    state.loginError = "";
+    const employee = getEmployeeByQr(state.scannedQR.trim().toUpperCase());
+    if (!employee) {
+      state.loginError = "Invalid employee QR code";
+      render();
+      return;
+    }
+
+    state.scannedEmployee = employee;
+    state.scannedQR = employee.qrCode;
+    state.loginStep = "pin";
     render();
+  }
+
+  async function submitPin() {
+    state.loginError = "";
+    if (!state.scannedEmployee) {
+      state.loginError = "No employee scanned";
+      render();
+      return;
+    }
+
+    try {
+      const employee = await fetchJson("/api/staff/login", {
+        method: "POST",
+        body: JSON.stringify({
+          qrCode: state.scannedEmployee.qrCode,
+          pin: state.pin
+        })
+      });
+
+      stopScanner();
+      state.loggedInEmployee = employee;
+      state.loginOpen = false;
+      state.loginStep = "scan";
+      state.scannedEmployee = null;
+      state.pin = "";
+      state.scannedQR = "";
+      state.loginError = "";
+      state.showEmployeeManagement = false;
+      await refreshOrders();
+      await refreshEmployees();
+      render();
+    } catch (error) {
+      state.loginError = error.message || "Incorrect PIN";
+      state.pin = "";
+      render();
+    }
+  }
+
+  async function addEmployee() {
+    state.employeeError = "";
+    const name = state.employeeForm.name.trim();
+    const pin = state.employeeForm.pin.trim();
+
+    if (!name || !pin) {
+      state.employeeError = "Please fill in all fields";
+      render();
+      return;
+    }
+
+    if (pin.length < 4) {
+      state.employeeError = "PIN must be at least 4 digits";
+      render();
+      return;
+    }
+
+    try {
+      const employee = await fetchJson("/api/staff/employees", {
+        method: "POST",
+        body: JSON.stringify({
+          actorEmployeeId: state.loggedInEmployee.id,
+          name,
+          pin,
+          role: state.employeeForm.role
+        })
+      });
+
+      state.showAddEmployee = false;
+      state.employeeForm = { name: "", pin: "", role: "cashier" };
+      state.qrEmployeeCode = employee.qrCode;
+      await refreshEmployees();
+      render();
+    } catch (error) {
+      state.employeeError = error.message || "Unable to add employee.";
+      render();
+    }
+  }
+
+  async function deleteEmployee(id) {
+    if (!state.loggedInEmployee || id === state.loggedInEmployee.id) {
+      return;
+    }
+
+    try {
+      await fetchJson(`/api/staff/employees/${id}?actorEmployeeId=${state.loggedInEmployee.id}`, {
+        method: "DELETE"
+      });
+      await refreshEmployees();
+      render();
+    } catch (error) {
+      state.employeeError = error.message || "Unable to delete employee.";
+      render();
+    }
+  }
+
+  async function updateOrderStatus(id, nextStatus) {
+    try {
+      const updated = await fetchJson(`/api/orders/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          actorEmployeeId: state.loggedInEmployee.id,
+          status: nextStatus
+        })
+      });
+
+      state.orders = state.orders.map(order => order.id === id ? updated : order);
+      if (state.currentOrder && state.currentOrder.id === id) {
+        state.currentOrder = updated;
+      }
+
+      await loadBootstrapData();
+    } catch (error) {
+      state.appError = error.message || "Unable to update the order.";
+      render();
+    }
+  }
+
+  function downloadEmployeeQr() {
+    const canvas = document.getElementById("employee-qr-canvas");
+    if (!canvas) {
+      return;
+    }
+
+    const link = document.createElement("a");
+    link.download = `employee-qr-${state.qrEmployeeCode}.png`;
+    link.href = canvas.toDataURL();
+    link.click();
+  }
+
+  function printEmployeeQr() {
+    const canvas = document.getElementById("employee-qr-canvas");
+    const employee = state.employees.find(item => item.qrCode === state.qrEmployeeCode);
+    if (!canvas || !employee) {
+      return;
+    }
+
+    const newWindow = window.open("", "_blank");
+    if (!newWindow) {
+      return;
+    }
+
+    newWindow.document.write(`
+      <html>
+      <head>
+        <title>Employee QR Code - ${escapeHtml(employee.name)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+          .wrap { text-align:center; border:2px solid #000; padding:24px; }
+          img { max-width:300px; display:block; margin:16px auto; }
+        </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <h1>E-Canteen Staff ID</h1>
+          <h2>${escapeHtml(employee.name)}</h2>
+          <img src="${canvas.toDataURL()}" alt="QR Code" />
+          <div>${escapeHtml(employee.qrCode)}</div>
+        </div>
+      </body>
+      </html>
+    `);
+    newWindow.document.close();
+    newWindow.print();
+  }
+
+  function renderLoading() {
+    return `
+      <section class="screen narrow">
+        <div class="status-card">
+          <h2 class="section-title">Loading E-Canteen</h2>
+          <p class="meta">Preparing menu, orders, and staff data.</p>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderBanner() {
+    return state.appError
+      ? `<div class="screen"><div class="error-box">${escapeHtml(state.appError)}</div></div>`
+      : "";
   }
 
   function renderStudentHeader() {
@@ -256,6 +466,7 @@
           <div class="topbar-main">
             <div>
               <h1>E-Canteen</h1>
+              <p>Cloud-ready canteen ordering</p>
             </div>
             ${state.screen !== "status" ? `
               <button class="cart-button" data-action="goto-cart">
@@ -271,13 +482,13 @@
 
   function renderMenuScreen() {
     const filtered = state.selectedCategory === 1
-      ? products
-      : products.filter(product => product.categoryId === state.selectedCategory);
+      ? state.products
+      : state.products.filter(product => product.categoryId === state.selectedCategory);
 
     return `
       <section class="screen">
         <div class="category-tabs">
-          ${categories.map(category => `
+          ${state.categories.map(category => `
             <button class="pill ${state.selectedCategory === category.id ? "active student" : ""}" data-action="set-category" data-id="${category.id}">
               ${escapeHtml(category.name)}
             </button>
@@ -386,11 +597,7 @@
             <label class="section-title" style="font-size:1rem">Amount Received</label>
             <input class="input" name="cashAmount" type="number" min="0" step="0.01" placeholder="0.00" value="${escapeHtml(state.cashAmount)}" />
             ${state.paymentError ? `<p class="error-text" style="margin-top:0.5rem">${escapeHtml(state.paymentError)}</p>` : ""}
-            ${!Number.isNaN(change) && state.cashAmount && change >= 0 ? `
-              <div class="success-box" style="margin-top:1rem">
-                Change: ${peso(change)}
-              </div>
-            ` : ""}
+            ${!Number.isNaN(change) && state.cashAmount && change >= 0 ? `<div class="success-box" style="margin-top:1rem">Change: ${peso(change)}</div>` : ""}
             <button class="btn-main" style="margin-top:1rem" data-action="confirm-cash">Confirm Payment</button>
           </div>
         </section>
@@ -492,7 +699,7 @@
             <div class="order-items">
               ${state.currentOrder.items.map(item => `
                 <div class="line-row" style="margin-bottom:0.5rem">
-                  <span>${item.quantity}x ${escapeHtml(item.product.name)}</span>
+                  <span>${item.quantity}x ${escapeHtml(item.productName)}</span>
                   <strong>${peso(item.price * item.quantity)}</strong>
                 </div>
               `).join("")}
@@ -530,19 +737,28 @@
 
   function renderStudentView() {
     let content = "";
-    if (state.screen === "menu") content = renderMenuScreen();
-    if (state.screen === "cart") content = renderCartScreen();
-    if (state.screen === "checkout") content = renderCheckoutScreen();
-    if (state.screen === "status") content = renderStatusScreen();
+    if (state.loading) content = renderLoading();
+    if (!state.loading && state.screen === "menu") content = renderMenuScreen();
+    if (!state.loading && state.screen === "cart") content = renderCartScreen();
+    if (!state.loading && state.screen === "checkout") content = renderCheckoutScreen();
+    if (!state.loading && state.screen === "status") content = renderStatusScreen();
 
     return `
       <div class="student-shell">
         ${renderStudentHeader()}
+        ${renderBanner()}
         ${content}
         <button class="staff-login" data-action="open-login">Staff Login</button>
         ${state.loginOpen ? renderLoginModal() : ""}
       </div>
     `;
+  }
+
+  function getFilteredCount(status) {
+    if (status === "all") {
+      return state.orders.length;
+    }
+    return state.orders.filter(order => order.status === status).length;
   }
 
   function renderStaffHeader() {
@@ -578,19 +794,10 @@
     `;
   }
 
-  function getFilteredCount(status) {
-    const orders = getOrders();
-    if (status === "all") {
-      return orders.length;
-    }
-    return orders.filter(order => order.status === status).length;
-  }
-
   function renderDashboard() {
-    const allOrders = getOrders().slice().reverse();
     const visible = state.filter === "all"
-      ? allOrders
-      : allOrders.filter(order => order.status === state.filter);
+      ? state.orders
+      : state.orders.filter(order => order.status === state.filter);
 
     if (!visible.length) {
       return `
@@ -604,6 +811,7 @@
 
     return `
       <section class="screen">
+        ${renderBanner()}
         <div class="list-stack">
           ${visible.map(order => `
             <article class="order-card card">
@@ -621,7 +829,7 @@
                 <div class="meta" style="margin-bottom:0.5rem; font-weight:700">Items:</div>
                 ${order.items.map(item => `
                   <div class="line-row meta" style="margin-bottom:0.35rem">
-                    <span>${item.quantity}x ${escapeHtml(item.product.name)}</span>
+                    <span>${item.quantity}x ${escapeHtml(item.productName)}</span>
                     <strong>${peso(item.price * item.quantity)}</strong>
                   </div>
                 `).join("")}
@@ -631,18 +839,10 @@
                 ${order.referenceNumber ? `<div class="meta">Ref: <strong>${escapeHtml(order.referenceNumber)}</strong></div>` : ""}
               </div>
               <div class="toolbar-actions">
-                ${order.status === "pending" && order.paymentMethod === "gcash" ? `
-                  <button class="btn-main" style="width:auto" data-action="update-order-status" data-id="${order.id}" data-status-value="paid">Confirm Payment</button>
-                ` : ""}
-                ${order.status === "paid" ? `
-                  <button class="btn-secondary" data-action="update-order-status" data-id="${order.id}" data-status-value="preparing">Start Preparing</button>
-                ` : ""}
-                ${order.status === "preparing" ? `
-                  <button class="btn-main" style="width:auto" data-action="update-order-status" data-id="${order.id}" data-status-value="completed">Mark Complete</button>
-                ` : ""}
-                ${(order.status === "pending" || order.status === "paid") ? `
-                  <button class="btn-danger" data-action="update-order-status" data-id="${order.id}" data-status-value="cancelled">Cancel Order</button>
-                ` : ""}
+                ${order.status === "pending" && order.paymentMethod === "gcash" ? `<button class="btn-main" style="width:auto" data-action="update-order-status" data-id="${order.id}" data-status-value="paid">Confirm Payment</button>` : ""}
+                ${order.status === "paid" ? `<button class="btn-secondary" data-action="update-order-status" data-id="${order.id}" data-status-value="preparing">Start Preparing</button>` : ""}
+                ${order.status === "preparing" ? `<button class="btn-main" style="width:auto" data-action="update-order-status" data-id="${order.id}" data-status-value="completed">Mark Complete</button>` : ""}
+                ${(order.status === "pending" || order.status === "paid") ? `<button class="btn-danger" data-action="update-order-status" data-id="${order.id}" data-status-value="cancelled">Cancel Order</button>` : ""}
               </div>
             </article>
           `).join("")}
@@ -652,14 +852,14 @@
   }
 
   function renderEmployeeManagement() {
-    const employees = getEmployees();
     return `
       <section class="screen">
+        ${renderBanner()}
         <div style="display:flex; justify-content:flex-end; margin-bottom:1rem">
           <button class="btn-main" style="width:auto; background:#2563eb" data-action="open-add-employee">Add Employee</button>
         </div>
         <div class="employee-grid">
-          ${employees.map(employee => `
+          ${state.employees.map(employee => `
             <article class="employee-card">
               <div class="order-header" style="align-items:flex-start">
                 <div style="display:flex; gap:0.75rem; align-items:center">
@@ -676,9 +876,7 @@
               </div>
               <div class="toolbar-actions">
                 <button class="btn-main" style="width:auto" data-action="show-employee-qr" data-code="${escapeHtml(employee.qrCode)}">Show QR</button>
-                ${state.loggedInEmployee.id !== employee.id ? `
-                  <button class="btn-danger" data-action="delete-employee" data-id="${escapeHtml(employee.id)}">Delete</button>
-                ` : ""}
+                ${state.loggedInEmployee.id !== employee.id ? `<button class="btn-danger" data-action="delete-employee" data-id="${employee.id}">Delete</button>` : ""}
               </div>
             </article>
           `).join("")}
@@ -751,7 +949,7 @@
                 <span class="meta" style="color:inherit">${escapeHtml(state.scannedEmployee.role.toUpperCase())}</span>
               </div>
               <label class="section-title" style="font-size:1rem">Enter Your PIN</label>
-              <input class="input blue" name="pin" type="password" maxlength="6" placeholder="••••" value="${escapeHtml(state.pin)}" />
+              <input class="input blue" name="pin" type="password" maxlength="6" placeholder="1234" value="${escapeHtml(state.pin)}" />
               <div class="toolbar-actions" style="margin-top:1rem">
                 <button class="btn-light" data-action="back-to-scan">Back</button>
                 <button class="btn-main" style="width:auto; background:#2563eb" data-action="submit-pin">Login</button>
@@ -794,7 +992,7 @@
   }
 
   function renderEmployeeQrModal() {
-    const employee = getEmployees().find(item => item.qrCode === state.qrEmployeeCode);
+    const employee = state.employees.find(item => item.qrCode === state.qrEmployeeCode);
     if (!employee) {
       return "";
     }
@@ -827,15 +1025,8 @@
     `;
   }
 
-  function render() {
-    appRoot.innerHTML = state.loggedInEmployee ? renderStaffView() : renderStudentView();
-    if (state.qrEmployeeCode) {
-      drawEmployeeQr();
-    }
-  }
-
   function drawEmployeeQr() {
-    const employee = getEmployees().find(item => item.qrCode === state.qrEmployeeCode);
+    const employee = state.employees.find(item => item.qrCode === state.qrEmployeeCode);
     const canvas = document.getElementById("employee-qr-canvas");
     if (!employee || !canvas) {
       return;
@@ -845,7 +1036,6 @@
     const size = 300;
     const moduleSize = 10;
     const modules = size / moduleSize;
-
     canvas.width = size;
     canvas.height = size;
 
@@ -877,148 +1067,14 @@
     }
   }
 
-  function submitManualQr() {
-    const employee = getEmployees().find(item => item.qrCode === state.scannedQR.trim().toUpperCase());
-    state.loginError = "";
-    if (!employee) {
-      state.loginError = "Invalid employee QR code";
-      render();
-      return;
+  function render() {
+    appRoot.innerHTML = state.loggedInEmployee ? renderStaffView() : renderStudentView();
+    if (state.qrEmployeeCode) {
+      drawEmployeeQr();
     }
-    state.scannedEmployee = employee;
-    state.scannedQR = employee.qrCode;
-    state.loginStep = "pin";
-    render();
   }
 
-  function submitPin() {
-    state.loginError = "";
-    if (!state.scannedEmployee) {
-      state.loginError = "No employee scanned";
-      render();
-      return;
-    }
-    if (state.pin !== state.scannedEmployee.pin) {
-      state.loginError = "Incorrect PIN";
-      state.pin = "";
-      render();
-      return;
-    }
-    stopScanner();
-    state.loggedInEmployee = state.scannedEmployee;
-    state.loginOpen = false;
-    state.loginStep = "scan";
-    state.scannedEmployee = null;
-    state.pin = "";
-    state.scannedQR = "";
-    state.loginError = "";
-    state.showEmployeeManagement = false;
-    render();
-  }
-
-  function addEmployee() {
-    state.employeeError = "";
-    const name = state.employeeForm.name.trim();
-    const pin = state.employeeForm.pin.trim();
-
-    if (!name || !pin) {
-      state.employeeError = "Please fill in all fields";
-      render();
-      return;
-    }
-    if (pin.length < 4) {
-      state.employeeError = "PIN must be at least 4 digits";
-      render();
-      return;
-    }
-
-    const employees = getEmployees();
-    const employee = {
-      id: Date.now().toString(),
-      name,
-      qrCode: `EMP${Date.now().toString().slice(-6)}`,
-      pin,
-      role: state.employeeForm.role,
-      createdAt: new Date().toISOString()
-    };
-
-    employees.push(employee);
-    setStorage("employees", employees);
-    state.showAddEmployee = false;
-    state.employeeForm = { name: "", pin: "", role: "cashier" };
-    state.qrEmployeeCode = employee.qrCode;
-    render();
-  }
-
-  function deleteEmployee(id) {
-    if (id === state.loggedInEmployee.id) {
-      return;
-    }
-    const employees = getEmployees().filter(item => item.id !== id);
-    setStorage("employees", employees);
-    render();
-  }
-
-  function updateOrderStatus(id, nextStatus) {
-    const orders = getOrders().map(order => order.id === id ? { ...order, status: nextStatus } : order);
-    setStorage("orders", orders);
-    if (state.currentOrder && state.currentOrder.id === id) {
-      const updated = orders.find(order => order.id === id);
-      if (updated) {
-        state.currentOrder = updated;
-      }
-    }
-    render();
-  }
-
-  function downloadEmployeeQr() {
-    const canvas = document.getElementById("employee-qr-canvas");
-    if (!canvas) {
-      return;
-    }
-    const link = document.createElement("a");
-    link.download = `employee-qr-${state.qrEmployeeCode}.png`;
-    link.href = canvas.toDataURL();
-    link.click();
-  }
-
-  function printEmployeeQr() {
-    const canvas = document.getElementById("employee-qr-canvas");
-    const employee = getEmployees().find(item => item.qrCode === state.qrEmployeeCode);
-    if (!canvas || !employee) {
-      return;
-    }
-
-    const newWindow = window.open("", "_blank");
-    if (!newWindow) {
-      return;
-    }
-
-    newWindow.document.write(`
-      <html>
-      <head>
-        <title>Employee QR Code - ${escapeHtml(employee.name)}</title>
-        <style>
-          body { font-family: Arial, sans-serif; display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
-          .wrap { text-align:center; border:2px solid #000; padding:24px; }
-          img { max-width:300px; display:block; margin:16px auto; }
-        </style>
-      </head>
-      <body>
-        <div class="wrap">
-          <h1>E-Canteen Staff ID</h1>
-          <h2>${escapeHtml(employee.name)}</h2>
-          <img src="${canvas.toDataURL()}" alt="QR Code" />
-          <div>${escapeHtml(employee.qrCode)}</div>
-        </div>
-      </body>
-      </html>
-    `);
-    newWindow.document.close();
-    newWindow.print();
-  }
-
-  appRoot.addEventListener("click", event => {
+  appRoot.addEventListener("click", async event => {
     const target = event.target.closest("[data-action]");
     if (!target) {
       return;
@@ -1047,7 +1103,7 @@
       } else if (received < totalAmount()) {
         state.paymentError = `Insufficient amount. Need ${peso(totalAmount())}`;
       } else {
-        placeOrder("cash", { amountReceived: received });
+        await placeOrder("cash", { amountReceived: received });
         return;
       }
     }
@@ -1063,13 +1119,14 @@
         setTimeout(() => {
           state.isVerifying = false;
           placeOrder("gcash", { referenceNumber: state.gcashReference.trim() });
-        }, 1500);
+        }, 800);
         return;
       }
     }
     if (action === "new-order") {
       state.currentOrder = null;
       state.screen = "menu";
+      await loadBootstrapData();
     }
     if (action === "open-login") state.loginOpen = true;
     if (action === "close-login") {
@@ -1083,12 +1140,12 @@
       state.scannerError = "";
     }
     if (action === "start-scanner") {
-      startScanner();
+      await startScanner();
       return;
     }
     if (action === "stop-scanner") stopScanner();
     if (action === "submit-manual-qr") {
-      submitManualQr();
+      await submitManualQr();
       return;
     }
     if (action === "back-to-scan") {
@@ -1098,18 +1155,19 @@
       state.pin = "";
     }
     if (action === "submit-pin") {
-      submitPin();
+      await submitPin();
       return;
     }
     if (action === "logout-staff") {
       state.loggedInEmployee = null;
       state.showEmployeeManagement = false;
       state.filter = "all";
+      await loadBootstrapData();
     }
     if (action === "set-filter") state.filter = target.dataset.status;
     if (action === "toggle-employee-management") state.showEmployeeManagement = !state.showEmployeeManagement;
     if (action === "update-order-status") {
-      updateOrderStatus(Number(target.dataset.id), target.dataset.statusValue);
+      await updateOrderStatus(Number(target.dataset.id), target.dataset.statusValue);
       return;
     }
     if (action === "open-add-employee") state.showAddEmployee = true;
@@ -1119,12 +1177,15 @@
       state.employeeForm = { name: "", pin: "", role: "cashier" };
     }
     if (action === "submit-add-employee") {
-      addEmployee();
+      await addEmployee();
       return;
     }
     if (action === "show-employee-qr") state.qrEmployeeCode = target.dataset.code;
     if (action === "close-employee-qr") state.qrEmployeeCode = null;
-    if (action === "delete-employee") deleteEmployee(target.dataset.id);
+    if (action === "delete-employee") {
+      await deleteEmployee(Number(target.dataset.id));
+      return;
+    }
     if (action === "download-employee-qr") {
       downloadEmployeeQr();
       return;
@@ -1177,6 +1238,5 @@
     event.preventDefault();
   });
 
-  initializeStorage();
-  render();
+  loadBootstrapData();
 })();
