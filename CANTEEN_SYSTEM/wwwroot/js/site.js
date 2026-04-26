@@ -27,6 +27,7 @@
     scannedEmployee: null,
     loggedInEmployee: null,
     filter: "all",
+    orderSearch: "",
     showEmployeeManagement: false,
     showAddEmployee: false,
     employeeForm: { name: "", pin: "", role: "cashier" },
@@ -111,6 +112,52 @@
       default:
         return { icon: "...", title: "Order Placed", message: "Processing your order", iconClass: "pending" };
     }
+  }
+
+  function getCategoryLabel(categoryId) {
+    return state.categories.find(item => item.id === categoryId)?.name || "Items";
+  }
+
+  function normalize(value) {
+    return String(value ?? "").trim().toLowerCase();
+  }
+
+  function getVisibleOrders() {
+    const byStatus = state.filter === "all"
+      ? state.orders
+      : state.orders.filter(order => order.status === state.filter);
+
+    const search = normalize(state.orderSearch);
+    const filtered = !search
+      ? byStatus
+      : byStatus.filter(order =>
+          normalize(order.orderNumber).includes(search) ||
+          normalize(order.paymentMethod).includes(search) ||
+          normalize(order.referenceNumber).includes(search) ||
+          order.items.some(item => normalize(item.productName).includes(search))
+        );
+
+    const rank = { pending: 0, paid: 1, preparing: 2, completed: 3, cancelled: 4 };
+    return [...filtered].sort((left, right) => {
+      const statusDiff = (rank[left.status] ?? 99) - (rank[right.status] ?? 99);
+      if (statusDiff !== 0) {
+        return statusDiff;
+      }
+
+      return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
+    });
+  }
+
+  function getOrderMetrics() {
+    const pending = state.orders.filter(order => order.status === "pending").length;
+    const paid = state.orders.filter(order => order.status === "paid").length;
+    const preparing = state.orders.filter(order => order.status === "preparing").length;
+    const completedToday = state.orders.filter(order =>
+      order.status === "completed" &&
+      new Date(order.createdAt).toDateString() === new Date().toDateString()
+    ).length;
+
+    return { pending, paid, preparing, completedToday };
   }
 
   function resetPaymentState() {
@@ -487,6 +534,13 @@
 
     return `
       <section class="screen">
+        <div class="catalog-lead">
+          <div>
+            <h2 class="section-title">Choose Your Meal</h2>
+            <p class="meta">Tap quickly and browse more items per screen on mobile.</p>
+          </div>
+          <div class="results-chip">${filtered.length} item${filtered.length === 1 ? "" : "s"}</div>
+        </div>
         <div class="category-tabs">
           ${state.categories.map(category => `
             <button class="pill ${state.selectedCategory === category.id ? "active student" : ""}" data-action="set-category" data-id="${category.id}">
@@ -498,13 +552,14 @@
           ${filtered.map(product => {
             const inCart = getCartItem(product.id)?.quantity || 0;
             return `
-              <article class="card">
+              <article class="card product-card">
                 <div class="card-image-wrap">
                   <img class="card-image" src="${escapeHtml(product.imageUrl)}" alt="${escapeHtml(product.name)}" />
                   ${product.stock === 0 ? `<div class="out-of-stock">OUT OF STOCK</div>` : ""}
                   ${inCart > 0 && product.stock > 0 ? `<div class="badge-cart">Cart ${inCart}</div>` : ""}
                 </div>
                 <div class="card-body">
+                  <div class="mini-label">${escapeHtml(getCategoryLabel(product.categoryId))}</div>
                   <h3 class="product-name">${escapeHtml(product.name)}</h3>
                   <div class="price-row">
                     <span class="price">${peso(product.price)}</span>
@@ -763,6 +818,7 @@
 
   function renderStaffHeader() {
     const employee = state.loggedInEmployee;
+    const metrics = getOrderMetrics();
     return `
       <div class="topbar staff">
         <div class="topbar-inner">
@@ -781,6 +837,32 @@
             </div>
           </div>
           ${!state.showEmployeeManagement ? `
+            <div class="summary-grid dashboard-summary">
+              <article class="summary-card queue-summary urgent">
+                <div class="mini-label">Needs attention</div>
+                <h3>${metrics.pending}</h3>
+                <div class="meta">Pending payments</div>
+              </article>
+              <article class="summary-card queue-summary info">
+                <div class="mini-label">Ready to cook</div>
+                <h3>${metrics.paid}</h3>
+                <div class="meta">Paid orders waiting</div>
+              </article>
+              <article class="summary-card queue-summary calm">
+                <div class="mini-label">In kitchen</div>
+                <h3>${metrics.preparing}</h3>
+                <div class="meta">Preparing now</div>
+              </article>
+              <article class="summary-card queue-summary neutral">
+                <div class="mini-label">Finished today</div>
+                <h3>${metrics.completedToday}</h3>
+                <div class="meta">Completed orders</div>
+              </article>
+            </div>
+            <div class="dashboard-toolbar">
+              <input class="input blue dashboard-search" name="orderSearch" type="text" placeholder="Search order no., item, payment, ref..." value="${escapeHtml(state.orderSearch)}" />
+              <div class="results-chip">${getVisibleOrders().length} visible</div>
+            </div>
             <div class="topbar-tabs">
               ${["all", "pending", "paid", "preparing", "completed"].map(status => `
                 <button class="pill ${state.filter === status ? "active staff" : ""}" data-action="set-filter" data-status="${status}">
@@ -795,15 +877,14 @@
   }
 
   function renderDashboard() {
-    const visible = state.filter === "all"
-      ? state.orders
-      : state.orders.filter(order => order.status === state.filter);
+    const visible = getVisibleOrders();
 
     if (!visible.length) {
       return `
         <section class="screen">
           <div class="empty-card">
             <h2 class="section-title">No orders found</h2>
+            <p class="meta">Try another status tab or clear your search.</p>
           </div>
         </section>
       `;
@@ -814,7 +895,7 @@
         ${renderBanner()}
         <div class="list-stack">
           ${visible.map(order => `
-            <article class="order-card card">
+            <article class="order-card card compact-order ${order.status}">
               <div class="order-header">
                 <div>
                   <h3 class="order-title">${escapeHtml(order.orderNumber)}</h3>
@@ -825,6 +906,11 @@
                   <div class="price" style="margin-top:0.5rem">${peso(order.totalAmount)}</div>
                 </div>
               </div>
+              <div class="order-meta-row">
+                <div class="results-chip subtle">${order.items.length} item${order.items.length === 1 ? "" : "s"}</div>
+                <div class="results-chip subtle">Payment: ${escapeHtml(order.paymentMethod.toUpperCase())}</div>
+                ${order.referenceNumber ? `<div class="results-chip subtle">Ref: ${escapeHtml(order.referenceNumber)}</div>` : ""}
+              </div>
               <div class="status-block">
                 <div class="meta" style="margin-bottom:0.5rem; font-weight:700">Items:</div>
                 ${order.items.map(item => `
@@ -833,10 +919,6 @@
                     <strong>${peso(item.price * item.quantity)}</strong>
                   </div>
                 `).join("")}
-              </div>
-              <div class="action-row" style="margin-bottom:1rem">
-                <div class="meta">Payment: <strong>${escapeHtml(order.paymentMethod.toUpperCase())}</strong></div>
-                ${order.referenceNumber ? `<div class="meta">Ref: <strong>${escapeHtml(order.referenceNumber)}</strong></div>` : ""}
               </div>
               <div class="toolbar-actions">
                 ${order.status === "pending" && order.paymentMethod === "gcash" ? `<button class="btn-main" style="width:auto" data-action="update-order-status" data-id="${order.id}" data-status-value="paid">Confirm Payment</button>` : ""}
@@ -1082,13 +1164,14 @@
 
     const action = target.dataset.action;
     const productId = Number(target.dataset.id);
+    const cartItem = Number.isNaN(productId) ? null : getCartItem(productId);
 
     if (action === "set-category") state.selectedCategory = Number(target.dataset.id);
     if (action === "add-cart") addToCart(productId);
     if (action === "goto-cart") state.screen = "cart";
     if (action === "goto-menu") state.screen = "menu";
-    if (action === "decrease-cart") updateQuantity(productId, getCartItem(productId).quantity - 1);
-    if (action === "increase-cart") updateQuantity(productId, getCartItem(productId).quantity + 1);
+    if (action === "decrease-cart" && cartItem) updateQuantity(productId, cartItem.quantity - 1);
+    if (action === "increase-cart" && cartItem) updateQuantity(productId, cartItem.quantity + 1);
     if (action === "remove-cart") updateQuantity(productId, 0);
     if (action === "goto-checkout") state.screen = "checkout";
     if (action === "select-payment") {
@@ -1204,9 +1287,12 @@
       return;
     }
 
+    let shouldRender = false;
+
     if (target.name === "cashAmount") {
       state.cashAmount = target.value;
       state.paymentError = "";
+      shouldRender = true;
     }
     if (target.name === "gcashReference") {
       state.gcashReference = target.value;
@@ -1231,6 +1317,14 @@
     if (target.name === "employeeRole") {
       state.employeeForm.role = target.value;
       state.employeeError = "";
+    }
+    if (target.name === "orderSearch") {
+      state.orderSearch = target.value;
+      shouldRender = true;
+    }
+
+    if (shouldRender) {
+      render();
     }
   });
 

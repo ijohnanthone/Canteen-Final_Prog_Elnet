@@ -3,6 +3,8 @@ namespace CANTEEN_SYSTEM.Data.Entities;
 public class Order
 {
     public int Id { get; set; }
+    public string? SyncId { get; set; }
+    public DateTime? LastModifiedAt { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public decimal TotalAmount { get; set; }
     public string PaymentMethod { get; set; } = string.Empty;

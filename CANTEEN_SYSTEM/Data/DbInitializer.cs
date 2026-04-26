@@ -5,15 +5,17 @@ namespace CANTEEN_SYSTEM.Data;
 
 public static class DbInitializer
 {
+    public const string CloudSeedScheduledKey = "sync.cloud-seed-scheduled";
+
     public static async Task InitializeAsync(IServiceProvider services)
     {
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<CanteenDbContext>();
 
-        // Works for both providers here:
-        // - SQLite creates the local file on first run
-        // - Azure SQL creates the schema in the selected database
-        await db.Database.EnsureCreatedAsync();
+        // Works for both providers here and upgrades the older local schema
+        // with the sync columns/tables needed for offline-first replication.
+        await SyncSchemaManager.EnsureAsync(db);
+        await EnsureSyncMetadataAsync(db);
 
         if (!await db.Products.AnyAsync())
         {
@@ -53,5 +55,87 @@ public static class DbInitializer
         }
 
         await db.SaveChangesAsync();
+        await SeedInitialSyncQueueAsync(db);
+        await db.SaveChangesAsync();
+    }
+
+    public static async Task EnsureSyncMetadataAsync(CanteenDbContext db)
+    {
+        var now = DateTime.UtcNow;
+
+        foreach (var product in await db.Products.Where(item => item.SyncId == null || item.SyncId == string.Empty || item.LastModifiedAt == null).ToListAsync())
+        {
+            product.SyncId ??= Guid.NewGuid().ToString("N");
+            product.LastModifiedAt ??= now;
+        }
+
+        foreach (var employee in await db.Employees.Where(item => item.SyncId == null || item.SyncId == string.Empty || item.LastModifiedAt == null).ToListAsync())
+        {
+            employee.SyncId ??= Guid.NewGuid().ToString("N");
+            employee.LastModifiedAt ??= employee.CreatedAt == default ? now : employee.CreatedAt;
+        }
+
+        foreach (var order in await db.Orders.Where(item => item.SyncId == null || item.SyncId == string.Empty || item.LastModifiedAt == null).ToListAsync())
+        {
+            order.SyncId ??= Guid.NewGuid().ToString("N");
+            order.LastModifiedAt ??= order.CreatedAt == default ? now : order.CreatedAt;
+        }
+
+        foreach (var orderItem in await db.OrderItems.Where(item => item.SyncId == null || item.SyncId == string.Empty || item.LastModifiedAt == null).ToListAsync())
+        {
+            orderItem.SyncId ??= Guid.NewGuid().ToString("N");
+            orderItem.LastModifiedAt ??= now;
+        }
+    }
+
+    public static async Task SeedInitialSyncQueueAsync(CanteenDbContext db)
+    {
+        var cloudSeedState = await db.AppState.FirstOrDefaultAsync(item => item.Key == CloudSeedScheduledKey);
+        if (cloudSeedState is not null)
+        {
+            return;
+        }
+
+        var existingQueueKeys = await db.SyncQueue
+            .Select(item => $"{item.EntityType}:{item.EntitySyncId}:{item.Operation}")
+            .ToHashSetAsync();
+
+        foreach (var product in await db.Products.AsNoTracking().ToListAsync())
+        {
+            TryQueue(existingQueueKeys, db, "product", product.SyncId ?? Guid.NewGuid().ToString("N"), "upsert", product.LastModifiedAt ?? DateTime.UtcNow);
+        }
+
+        foreach (var employee in await db.Employees.AsNoTracking().ToListAsync())
+        {
+            TryQueue(existingQueueKeys, db, "employee", employee.SyncId ?? Guid.NewGuid().ToString("N"), "upsert", employee.LastModifiedAt ?? DateTime.UtcNow);
+        }
+
+        foreach (var order in await db.Orders.AsNoTracking().ToListAsync())
+        {
+            TryQueue(existingQueueKeys, db, "order", order.SyncId ?? Guid.NewGuid().ToString("N"), "upsert", order.LastModifiedAt ?? DateTime.UtcNow);
+        }
+
+        db.AppState.Add(new Entities.AppStateEntry
+        {
+            Key = CloudSeedScheduledKey,
+            Value = DateTime.UtcNow.ToString("O")
+        });
+    }
+
+    private static void TryQueue(HashSet<string> keys, CanteenDbContext db, string entityType, string entitySyncId, string operation, DateTime createdAt)
+    {
+        var key = $"{entityType}:{entitySyncId}:{operation}";
+        if (!keys.Add(key))
+        {
+            return;
+        }
+
+        db.SyncQueue.Add(new Entities.SyncQueueEntry
+        {
+            EntityType = entityType,
+            EntitySyncId = entitySyncId,
+            Operation = operation,
+            CreatedAt = createdAt == default ? DateTime.UtcNow : createdAt
+        });
     }
 }

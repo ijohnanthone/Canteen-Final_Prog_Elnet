@@ -1,4 +1,5 @@
 using CANTEEN_SYSTEM.Data;
+using CANTEEN_SYSTEM.Services.Sync;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,23 +7,24 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
-// AzureSql takes priority when it is configured. If it is empty,
-// the app falls back to the local SQLite file for development.
-var connectionString = builder.Configuration.GetConnectionString("AzureSql");
-var fallbackConnection = builder.Configuration.GetConnectionString("LocalSqlite")
+// SQLite is the primary app database so the MVC app keeps working locally
+// even when the cloud database is unreachable.
+var localConnectionString = builder.Configuration.GetConnectionString("LocalSqlite")
     ?? "Data Source=canteen.db";
+var azureConnectionString = builder.Configuration.GetConnectionString("AzureSql");
+builder.Services.Configure<CloudSyncOptions>(options =>
+{
+    options.AzureSqlConnectionString = azureConnectionString;
+    options.IntervalSeconds = builder.Configuration.GetValue<int?>($"{CloudSyncOptions.SectionName}:IntervalSeconds") ?? 15;
+});
 
 builder.Services.AddDbContext<CanteenDbContext>(options =>
 {
-    if (!string.IsNullOrWhiteSpace(connectionString))
-    {
-        options.UseAzureSql(connectionString);
-    }
-    else
-    {
-        options.UseSqlite(fallbackConnection);
-    }
+    options.UseSqlite(localConnectionString);
 });
+builder.Services.AddScoped<SyncQueueService>();
+builder.Services.AddScoped<CloudSyncService>();
+builder.Services.AddHostedService<CloudSyncWorker>();
 
 var app = builder.Build();
 

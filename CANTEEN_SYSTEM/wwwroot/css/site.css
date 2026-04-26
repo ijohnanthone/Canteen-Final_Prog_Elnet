@@ -109,6 +109,20 @@ button {
   gap: 1rem;
 }
 
+.catalog-lead,
+.dashboard-toolbar,
+.order-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.catalog-lead,
+.dashboard-toolbar {
+  margin-bottom: 1rem;
+}
+
 .category-tabs {
   grid-auto-flow: column;
   grid-auto-columns: max-content;
@@ -145,6 +159,10 @@ button {
   overflow: hidden;
 }
 
+.product-card {
+  border: 1px solid #e5e7eb;
+}
+
 .card-image-wrap {
   position: relative;
 }
@@ -158,6 +176,15 @@ button {
 
 .card-body {
   padding: 1rem;
+}
+
+.mini-label {
+  margin-bottom: 0.4rem;
+  color: #6b7280;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .price-row,
@@ -218,6 +245,24 @@ button {
 .pill.active.staff {
   background: #fff;
   color: #2563eb;
+}
+
+.results-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  background: #e5f0ff;
+  color: #1d4ed8;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.results-chip.subtle {
+  background: #f3f4f6;
+  color: #4b5563;
 }
 
 .badge-cart,
@@ -465,6 +510,42 @@ button {
   margin: 0 0 0.75rem;
 }
 
+.dashboard-summary {
+  margin-top: 1rem;
+}
+
+.queue-summary {
+  border: 1px solid #dbeafe;
+}
+
+.queue-summary h3 {
+  margin: 0.15rem 0;
+  font-size: 2rem;
+}
+
+.queue-summary.urgent {
+  background: linear-gradient(180deg, #fff7ed, #ffffff);
+  border-color: #fed7aa;
+}
+
+.queue-summary.info {
+  background: linear-gradient(180deg, #eff6ff, #ffffff);
+}
+
+.queue-summary.calm {
+  background: linear-gradient(180deg, #ecfeff, #ffffff);
+  border-color: #a5f3fc;
+}
+
+.queue-summary.neutral {
+  background: linear-gradient(180deg, #f9fafb, #ffffff);
+  border-color: #e5e7eb;
+}
+
+.dashboard-search {
+  max-width: 420px;
+}
+
 .payment-card {
   border: 2px solid #e5e7eb;
 }
@@ -671,6 +752,27 @@ button {
   border-bottom: 1px solid #e5e7eb;
 }
 
+.compact-order.pending {
+  border-left: 6px solid #f97316;
+}
+
+.compact-order.paid {
+  border-left: 6px solid #16a34a;
+}
+
+.compact-order.preparing {
+  border-left: 6px solid #2563eb;
+}
+
+.compact-order.completed {
+  border-left: 6px solid #6b7280;
+}
+
+.order-meta-row {
+  flex-wrap: wrap;
+  margin: 0.85rem 0;
+}
+
 .status-pill {
   padding: 0.38rem 0.75rem;
   font-size: 0.8rem;
@@ -765,13 +867,108 @@ button {
   .cart-item,
   .order-header,
   .line-row,
-  .action-row {
+  .action-row,
+  .catalog-lead,
+  .dashboard-toolbar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .screen {
+    padding: 0.85rem;
+  }
+
+  .topbar-inner {
+    padding: 0.85rem;
+  }
+
+  .topbar h1 {
+    font-size: 1.35rem;
+  }
+
+  .grid-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .card-image {
+    height: 112px;
+  }
+
+  .card-body {
+    padding: 0.75rem;
+  }
+
+  .product-name {
+    font-size: 0.92rem;
+    line-height: 1.25;
+    min-height: 2.3em;
+  }
+
+  .price {
+    font-size: 1.05rem;
+  }
+
+  .stock,
+  .meta,
+  .helper,
+  .hint {
+    font-size: 0.82rem;
+  }
+
+  .btn-main,
+  .btn-secondary,
+  .btn-danger,
+  .btn-light {
+    padding: 0.75rem 0.9rem;
+  }
+
+  .pill {
+    padding: 0.6rem 0.9rem;
+    font-size: 0.88rem;
+  }
+
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .queue-summary h3 {
+    font-size: 1.5rem;
+  }
+
+  .order-card,
+  .summary-card,
+  .payment-card,
+  .employee-card {
+    padding: 0.85rem;
   }
 
   .staff-login {
     right: 1rem;
     bottom: 1rem;
+    padding: 0.85rem 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .badge-cart {
+    padding: 0.25rem 0.55rem;
+    font-size: 0.74rem;
+  }
+
+  .out-of-stock {
+    left: 0.5rem;
+    right: 0.5rem;
+    padding: 0.5rem;
+    font-size: 0.78rem;
   }
 }

@@ -2,6 +2,7 @@ using CANTEEN_SYSTEM.Contracts;
 using CANTEEN_SYSTEM.Data;
 using CANTEEN_SYSTEM.Data.Entities;
 using CANTEEN_SYSTEM.Extensions;
+using CANTEEN_SYSTEM.Services.Sync;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,7 +10,7 @@ namespace CANTEEN_SYSTEM.Controllers.Api;
 
 [ApiController]
 [Route("api/staff")]
-public class StaffController(CanteenDbContext db) : ControllerBase
+public class StaffController(CanteenDbContext db, SyncQueueService syncQueue) : ControllerBase
 {
     [HttpPost("login")]
     public async Task<ActionResult<EmployeeDto>> Login([FromBody] LoginRequest request)
@@ -64,14 +65,17 @@ public class StaffController(CanteenDbContext db) : ControllerBase
 
         var employee = new Employee
         {
+            SyncId = Guid.NewGuid().ToString("N"),
             Name = name,
             Pin = pin,
             Role = role,
             QrCode = $"EMP{DateTime.UtcNow.Ticks.ToString()[^6..]}",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            LastModifiedAt = DateTime.UtcNow
         };
 
         db.Employees.Add(employee);
+        await syncQueue.QueueUpsertAsync(db, "employee", employee.SyncId!, employee.LastModifiedAt!.Value);
         await db.SaveChangesAsync();
 
         return Created(string.Empty, employee.ToDto());
@@ -97,6 +101,8 @@ public class StaffController(CanteenDbContext db) : ControllerBase
             return NotFound();
         }
 
+        employee.SyncId ??= Guid.NewGuid().ToString("N");
+        await syncQueue.QueueDeleteAsync(db, "employee", employee.SyncId);
         db.Employees.Remove(employee);
         await db.SaveChangesAsync();
         return NoContent();

@@ -2,6 +2,7 @@ using CANTEEN_SYSTEM.Contracts;
 using CANTEEN_SYSTEM.Data;
 using CANTEEN_SYSTEM.Data.Entities;
 using CANTEEN_SYSTEM.Extensions;
+using CANTEEN_SYSTEM.Services.Sync;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,7 +10,7 @@ namespace CANTEEN_SYSTEM.Controllers.Api;
 
 [ApiController]
 [Route("api/orders")]
-public class OrdersController(CanteenDbContext db) : ControllerBase
+public class OrdersController(CanteenDbContext db, SyncQueueService syncQueue) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<OrderDto>>> GetOrders()
@@ -65,12 +66,16 @@ public class OrdersController(CanteenDbContext db) : ControllerBase
         }
 
         var totalAmount = request.Items.Sum(line => products[line.ProductId].Price * line.Quantity);
+        var changedAt = DateTime.UtcNow;
+        var orderSyncId = Guid.NewGuid().ToString("N");
         var order = new Order
         {
+            SyncId = orderSyncId,
             OrderNumber = $"ORD{DateTime.UtcNow:yyMMddHHmmssfff}",
             PaymentMethod = request.PaymentMethod.Trim().ToLowerInvariant(),
             Status = request.PaymentMethod.Equals("cash", StringComparison.OrdinalIgnoreCase) ? "paid" : "pending",
-            CreatedAt = DateTime.UtcNow,
+            CreatedAt = changedAt,
+            LastModifiedAt = changedAt,
             ReferenceNumber = string.IsNullOrWhiteSpace(request.ReferenceNumber) ? null : request.ReferenceNumber.Trim(),
             AmountReceived = request.AmountReceived,
             Change = request.AmountReceived.HasValue ? request.AmountReceived.Value - totalAmount : null,
@@ -80,18 +85,28 @@ public class OrdersController(CanteenDbContext db) : ControllerBase
         foreach (var line in request.Items)
         {
             var product = products[line.ProductId];
+            product.SyncId ??= Guid.NewGuid().ToString("N");
             // Reduce inventory at the same time the order is stored so stock stays in sync.
             product.Stock -= line.Quantity;
+            product.LastModifiedAt = changedAt;
             order.Items.Add(new OrderItem
             {
+                SyncId = Guid.NewGuid().ToString("N"),
                 ProductId = product.Id,
                 ProductName = product.Name,
                 Quantity = line.Quantity,
-                UnitPrice = product.Price
+                UnitPrice = product.Price,
+                LastModifiedAt = changedAt
             });
         }
 
         db.Orders.Add(order);
+        foreach (var product in products.Values)
+        {
+            await syncQueue.QueueUpsertAsync(db, "product", product.SyncId!, changedAt);
+        }
+
+        await syncQueue.QueueUpsertAsync(db, "order", order.SyncId!, changedAt);
         await db.SaveChangesAsync();
 
         await db.Entry(order).Collection(item => item.Items).LoadAsync();
@@ -125,6 +140,9 @@ public class OrdersController(CanteenDbContext db) : ControllerBase
         }
 
         order.Status = nextStatus;
+        order.SyncId ??= Guid.NewGuid().ToString("N");
+        order.LastModifiedAt = DateTime.UtcNow;
+        await syncQueue.QueueUpsertAsync(db, "order", order.SyncId, order.LastModifiedAt.Value);
         await db.SaveChangesAsync();
 
         return Ok(order.ToDto());
