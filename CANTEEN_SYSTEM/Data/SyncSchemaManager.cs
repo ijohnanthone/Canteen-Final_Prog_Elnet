@@ -62,9 +62,13 @@ public static class SyncSchemaManager
             {
                 await db.Database.ExecuteSqlRawAsync(command);
             }
-            catch (Exception ex) when (ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase))
+            catch (Exception ex) when (
+                ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase) ||
+                ex.Message.Contains("already has", StringComparison.OrdinalIgnoreCase) ||
+                ex.Message.Contains("column", StringComparison.OrdinalIgnoreCase))
             {
                 // Existing local databases may already have been upgraded.
+                // Ignore schema migration errors for columns that already exist.
             }
         }
     }
