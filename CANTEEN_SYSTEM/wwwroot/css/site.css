@@ -1324,3 +1324,110 @@ button:disabled {
     padding: 1rem;
   }
 }
+
+.qs-admin-body {
+  background: #eef3f9;
+}
+
+.qs-admin-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+.qs-sidebar {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.5rem 1rem;
+  background: linear-gradient(180deg, #dceaff 0%, #cde1ff 100%);
+  box-shadow: 4px 0 16px rgba(34, 74, 138, 0.08);
+}
+
+.qs-logo {
+  margin-bottom: 1.75rem;
+  padding: 0.25rem 0.75rem;
+  color: #15315e;
+  font-size: 1.5rem;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.qs-nav .nav-link {
+  padding: 0.95rem 1.25rem;
+  border-radius: 999px;
+  color: #17325d;
+  font-weight: 700;
+}
+
+.qs-nav .nav-link:hover {
+  background: rgba(255, 255, 255, 0.55);
+  color: #17325d;
+}
+
+.qs-nav .nav-link.active {
+  background: #fff;
+  color: #17325d;
+  box-shadow: 0 6px 18px rgba(34, 74, 138, 0.12);
+}
+
+.qs-logout-link {
+  padding: 0.9rem 1.25rem;
+  border-radius: 999px;
+  color: #17325d;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.qs-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.qs-topbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 1.25rem 2rem;
+}
+
+.qs-content {
+  padding: 0 2rem 2rem;
+}
+
+.qs-hero {
+  padding: 1.75rem 2rem;
+  border-radius: 1.5rem;
+  background: linear-gradient(135deg, #7daff8 0%, #a7cdfd 100%);
+  color: #0f172a;
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.12);
+}
+
+.qs-hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 2.6rem);
+  font-style: italic;
+  font-weight: 900;
+}
+
+.qs-hero p {
+  margin: 0.35rem 0 0;
+  font-weight: 600;
+}
+
+@media (max-width: 991px) {
+  .qs-admin-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .qs-sidebar {
+    gap: 1rem;
+  }
+
+  .qs-content,
+  .qs-topbar {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
